@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 
 namespace RubberDucky.Data
 {
+    /// <summary>
+    /// Dataloader class loads data from the northwind.csv and maps them to the domain objects.
+    /// </summary>
     public static class DataLoader
     {
         private static string _fileLocation;

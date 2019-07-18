@@ -40,11 +40,11 @@ namespace RubberDucky.Pages
         public async Task OnGetAsync()
         {
             var orderId = HttpContext.Session.GetString("OrderId");
+            // Check if orderid is set for the session. If not start the order en initialize an orderID
             if (string.IsNullOrWhiteSpace(orderId))
             {
                 HttpContext.Session.Set("OrderId", Guid.NewGuid().ToString());
                 orderId = HttpContext.Session.GetString("OrderId");
-               
                 var order = new Order()
                 {
                     OrderID = orderId,
@@ -53,14 +53,12 @@ namespace RubberDucky.Pages
                 _db.Set<Order>().Add(order);
                 await _db.SaveChangesAsync();
             }
-            Messages = await _db.Set<Message>().AsNoTracking().ToListAsync();
-            Products = await _db.Set<Product>().AsNoTracking().ToListAsync();
-            Order = await GetCurrentOrder();
         }
 
+        // Method called when the user sends a message
         public async Task<IActionResult> OnPostAsync()
         {
-            if (!ModelState.IsValid)
+            if (!ModelState.IsValid || string.IsNullOrWhiteSpace(Message.Text))
             {
                 return Page();
             }
@@ -97,13 +95,15 @@ namespace RubberDucky.Pages
             responder.RespondToNumber += r_OnRespondToNumber;
             responder.RespondToConfirmation += r_OnRespondToConfirmation;
             responder.DefaultResponse += r_DefaultResponse;
+
+            //To multithreading? Or Task?
             responder.CheckOnNumber(inputMessage);
             responder.CheckOnConfirmation(inputMessage);
         }
 
-        public List<OrderDetail> GetOrderDetails()
+        public async Task<List<OrderDetail>> GetOrderDetails()
         {
-            return Order.ConfirmedOrderDetails ?? new List<OrderDetail>();
+            return (await GetCurrentOrder()).ConfirmedOrderDetails ?? new List<OrderDetail>();
         }
 
         public async Task<Order> GetCurrentOrder()
@@ -114,6 +114,24 @@ namespace RubberDucky.Pages
                     .Include(o => o.StagedOrderDetails)
                     .ThenInclude(od => od.Product)
                     .FirstOrDefaultAsync(x => x.OrderID.Equals(HttpContext.Session.GetString("OrderId")));
+        }
+
+        public async Task<IList<Product>> GetProducts()
+        {
+            if(Products == null)
+            {
+                Products = await _db.Set<Product>().AsNoTracking().ToListAsync();
+            }
+            return Products;
+        }
+
+        public async Task<IList<Message>> GetMessages()
+        {
+            if (Messages == null)
+            {
+                Messages = await _db.Set<Message>().AsNoTracking().ToListAsync();
+            }
+            return Messages;
         }
     }
 }

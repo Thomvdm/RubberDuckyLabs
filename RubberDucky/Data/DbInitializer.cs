@@ -8,8 +8,12 @@ using System.Threading.Tasks;
 
 namespace RubberDucky.Data
 {
+    /// <summary>
+    /// Adds the loaded data from the source to the AppDbContext
+    /// </summary>
     public static class DbInitializer
     {
+        
         public static void Initialize(IServiceProvider serviceProvider)
         {
             using (var context = new AppDbContext(
