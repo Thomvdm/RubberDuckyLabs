@@ -28,6 +28,7 @@ namespace RubberDucky.Pages
             _entityRecognizer = new EntityRecognizer(db);
         }
 
+        #region Data
         [BindProperty]
         public Message Message { get; set; }
 
@@ -37,6 +38,63 @@ namespace RubberDucky.Pages
 
         public Order Order { get; private set; }
 
+        public async Task<List<OrderDetail>> GetOrderDetails()
+        {
+            return (await GetCurrentOrder()).ConfirmedOrderDetails ?? new List<OrderDetail>();
+        }
+
+        public async Task<Order> GetCurrentOrder()
+        {
+            return await _db.Set<Order>()
+                    .Include(o => o.ConfirmedOrderDetails)
+                    .ThenInclude(od => od.Product)
+                    .Include(o => o.StagedOrderDetails)
+                    .ThenInclude(od => od.Product)
+                    .FirstOrDefaultAsync(x => x.OrderID.Equals(HttpContext.Session.GetString("OrderId")));
+        }
+
+        public async Task<IList<Product>> GetProducts()
+        {
+            if (Products == null)
+            {
+                Products = await _db.Set<Product>().AsNoTracking().ToListAsync();
+            }
+            return Products;
+        }
+
+        public async Task<IList<Message>> GetMessages()
+        {
+            if (Messages == null)
+            {
+                Messages = await _db.Set<Message>().AsNoTracking().ToListAsync();
+            }
+            return Messages;
+        }
+
+        private async Task StoreSendMessage(Message inputMessage)
+        {
+            inputMessage.UpdateText(inputMessage.Text);
+            inputMessage.Id = Guid.NewGuid().ToString();
+            inputMessage.IsUser = true;
+            inputMessage.Recieved = DateTime.Now;
+            _db.Messages.Add(inputMessage);
+            await _db.SaveChangesAsync();
+        }
+
+        private async Task StoreRecievedMessage(Message message)
+        {
+            if (!string.IsNullOrWhiteSpace(message.Text))
+            {
+                message.Id = Guid.NewGuid().ToString();
+                message.IsUser = false;
+                message.Recieved = DateTime.Now;
+                _db.Messages.Add(message);
+                await _db.SaveChangesAsync();
+            }
+        }
+        #endregion
+
+        #region Actions
         public async Task OnGetAsync()
         {
             var orderId = HttpContext.Session.GetString("OrderId");
@@ -63,75 +121,39 @@ namespace RubberDucky.Pages
                 return Page();
             }
             await StoreSendMessage(Message);
-            Respond(Message);
+            await ProcessMessage(Message);
             return RedirectToPage();
         }
+        #endregion
 
-        private async Task StoreSendMessage(Message inputMessage)
+        private async Task ProcessMessage(Message inputMessage)
         {
-            inputMessage.UpdateText(inputMessage.Text);
-            inputMessage.Id = Guid.NewGuid().ToString();
-            inputMessage.IsUser = true;
-            inputMessage.Recieved = DateTime.Now;
-            _db.Messages.Add(inputMessage);
-            await _db.SaveChangesAsync();
-        }
-
-        private async Task StoreRecievedMessage(Message message)
-        {
-            if (!string.IsNullOrWhiteSpace(message.Text))
-            {
-                message.Id = Guid.NewGuid().ToString();
-                message.IsUser = false;
-                message.Recieved = DateTime.Now;
-                _db.Messages.Add(message);
-                await _db.SaveChangesAsync();
-            }
-        }
-
-        private void Respond(Message inputMessage)
-        {
-            var responder = new Response();
-            responder.RespondToNumber += r_OnRespondToNumber;
-            responder.RespondToConfirmation += r_OnRespondToConfirmation;
-            responder.DefaultResponse += r_DefaultResponse;
-
+            List<ModelResult> numberResults;
+            bool isConfirming;
+            double confirmingConfidence;
             //To multithreading? Or Task?
-            responder.CheckOnNumber(inputMessage);
-            responder.CheckOnConfirmation(inputMessage);
-        }
+            inputMessage.CheckOnNumber(out numberResults);
+            inputMessage.CheckConformation(out isConfirming, out confirmingConfidence);
 
-        public async Task<List<OrderDetail>> GetOrderDetails()
-        {
-            return (await GetCurrentOrder()).ConfirmedOrderDetails ?? new List<OrderDetail>();
-        }
-
-        public async Task<Order> GetCurrentOrder()
-        {
-            return await _db.Set<Order>()
-                    .Include(o => o.ConfirmedOrderDetails)
-                    .ThenInclude(od => od.Product)
-                    .Include(o => o.StagedOrderDetails)
-                    .ThenInclude(od => od.Product)
-                    .FirstOrDefaultAsync(x => x.OrderID.Equals(HttpContext.Session.GetString("OrderId")));
-        }
-
-        public async Task<IList<Product>> GetProducts()
-        {
-            if(Products == null)
+            
+            // Determine which response to use. If found numbers respond to the numbers.
+            if (numberResults.Count > 0)
             {
-                Products = await _db.Set<Product>().AsNoTracking().ToListAsync();
+                UpdateBasedOnRecievedNumbers(numberResults, inputMessage.Words);
+                await ImplicitConfirmation(numberResults, inputMessage.Words);
             }
-            return Products;
-        }
-
-        public async Task<IList<Message>> GetMessages()
-        {
-            if (Messages == null)
+            // If the confidence is high enough it could be that the user is confirming.
+            if (confirmingConfidence > 0.5)
             {
-                Messages = await _db.Set<Message>().AsNoTracking().ToListAsync();
+                UpdateBasedOnConfirmation(isConfirming, confirmingConfidence);
+                await Acknowledgement(isConfirming, confirmingConfidence);
             }
-            return Messages;
+
+            // If there are none numbers found and user isn't confirming default resposne.
+            if (numberResults.Count == 0 && confirmingConfidence < 0.5)
+            {
+                DefaultResponse();
+            }            
         }
     }
 }

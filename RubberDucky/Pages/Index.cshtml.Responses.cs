@@ -17,92 +17,107 @@ namespace RubberDucky.Pages
 {
     public partial class IndexModel : PageModel
     {
-        private async void r_OnRespondToNumber(object sender, EventArgs e)
+        private async void UpdateBasedOnRecievedNumbers(List<ModelResult> numbers, Dictionary<int, string> words)
         {
-            if (e is ResponseNumberEventArgs eventArgs)
+            var order = await GetCurrentOrder();
+            foreach (var number in numbers)
             {
-                var order = await GetCurrentOrder();
-                var message = new Message();
-                var quantity = 0;
-                foreach (var number in eventArgs.numbers)
+                var likelyProducts = _entityRecognizer.GetProducts(words, number);
+                
+                if (likelyProducts.Count > 0)
                 {
-                    var possibleProducts = _entityRecognizer.GetProducts(eventArgs.OriginalWords, number);
-                    int i;
-                    int resolution;
-                    int.TryParse(number.Text, out i);
-                    int.TryParse(number.Resolution.Values.First().ToString(), out resolution);
-                    if(possibleProducts.Count > 0)
-                    {
-                        quantity = i;
-                        if (i != resolution)
-                        {
-                            quantity = resolution;
-
-                        }
-                        order.AddStageOrderDetail(quantity, possibleProducts.FirstOrDefault());
-                        
-                    }
-                    BuildResponse(message, number, quantity, possibleProducts.FirstOrDefault(), eventArgs);
+                    order.AddStageOrderDetail(GetQuantity(number), likelyProducts.FirstOrDefault());
                 }
-                await _db.SaveChangesAsync();
             }
+            await _db.SaveChangesAsync();
         }
 
-        private async void r_OnRespondToConfirmation(object sender, EventArgs e)
+        private int GetQuantity(ModelResult number)
         {
-            if(e is ResponseConfirmationEventArgs args)
+            int quantity;
+            int i;
+            int resolution;
+            int.TryParse(number.Text, out i);
+            int.TryParse(number.Resolution.Values.First().ToString(), out resolution);
+            quantity = i;
+            if (i != resolution)
             {
-                var order = await GetCurrentOrder();
-                var message = new Message();
-                if (args.IsConfirming)
-                {
-                    message.UpdateText("Komt eraan!");
-                    for(var i = 0; i< order.StagedOrderDetails.Count; i++)
-                    {
-                        order.AddConfirmedOrderDetail(order.StagedOrderDetails[i]);
-                    }
-                }
-                else if(args.Confidence > 0.9)
-                {
-                    message.UpdateText("Wat moet het zijn?");
-                    order.StagedOrderDetails.Clear();
-                }
-                await _db.SaveChangesAsync();
-                await StoreRecievedMessage(message);
+                quantity = resolution;
             }
+            return quantity;
         }
 
-        private async void r_DefaultResponse(object sender, EventArgs e)
+        private async void UpdateBasedOnConfirmation(bool isConfirming, double confidence)
+        {
+            var order = await GetCurrentOrder();
+            // if is confirming add staged orderdetails to the confirmed orderdetails
+            if (isConfirming)
+            {
+                var amountStaged = order.StagedOrderDetails.Count;
+                for (var i = 0; i < amountStaged; i++)
+                {
+                    order.AddConfirmedOrderDetail(order.StagedOrderDetails.First());
+                }
+            }
+            // if opposing clear all staged order details
+            else if (confidence > 0.9)
+            {
+                order.StagedOrderDetails.Clear();
+            }
+            await _db.SaveChangesAsync();
+        }
+
+        private async void DefaultResponse()
         {
             var message = new Message();
-            message.UpdateText("Sorry, ik kan alleen bestellingen afnemen. Hiervoor heb ik aantallen nodig. Wat wil je?");
+            message.UpdateText("Ik kan alleen bestellingen afnemen. Hiervoor heb ik aantallen nodig. Wat wil je?");
             await StoreRecievedMessage(message);
         }
 
-        private async Task BuildResponse(Message message, ModelResult modelResult, int quantity, Product product, ResponseNumberEventArgs eventArgs)
+        private async Task ImplicitConfirmation(List<ModelResult> numbers, Dictionary<int, string> words)
         {
-            if (product == null)
+            var message = new Message();
+            foreach (var number in numbers)
             {
-                message.Text = $"Sorry, {modelResult.Resolution.Values.First()} van wat";
-                return;
-            }
-            else
-            {
-                message.Text = $"{message.Text} {quantity} {product.ProductName}";
-            }
+                var likelyProduct = _entityRecognizer.GetProducts(words, number).FirstOrDefault();
+                if (likelyProduct == null)
+                {
+                    message.Text = $"{number.Resolution.Values.First()} van wat?";
+                    return;
+                }
+                else
+                {
+                    message.Text = $"{message.Text} {GetQuantity(number)} {likelyProduct.ProductName}";
+                }
 
 
-            if (eventArgs.numbers.IndexOf(modelResult) == eventArgs.numbers.Count - 1)
-            {
-                message.Text = $"{message.Text} als ik het goed begrijp?";
+                if (numbers.IndexOf(number) == numbers.Count - 1)
+                {
+                    message.Text = $"{message.Text} als ik het goed begrijp?";
+                }
+                else if (numbers.Count > 1 && numbers.IndexOf(number) == numbers.Count - 2)
+                {
+                    message.Text = $"{message.Text} en";
+                }
+                else
+                {
+                    message.Text = $"{message.Text}, ";
+                }
+                await StoreRecievedMessage(message);
             }
-            else if (eventArgs.numbers.Count > 1 && eventArgs.numbers.IndexOf(modelResult) == eventArgs.numbers.Count - 2)
+            
+        }
+
+        private async Task Acknowledgement(bool isConfirming, double confidence)
+        {
+            var message = new Message();
+            if (isConfirming)
             {
-                message.Text = $"{message.Text} en";
+                message.UpdateText("Komt eraan!");
             }
-            else
+            else if (confidence > 0.9)
             {
-                message.Text = $"{message.Text}, ";
+                message.UpdateText("Wat moet het zijn?");
             }
             await StoreRecievedMessage(message);
         }
