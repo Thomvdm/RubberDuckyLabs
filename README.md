@@ -25,16 +25,7 @@ Within the code there are multiple oppertunities to implement parrallel tasks or
 Most of them will be indicated as comment within the code. Feel free to spot other oppertunities increase performance.
 
 ### 1.2 Create a natural response when ordering
-#### 1.2.1 Response construction
-A typical reply by humans will contain an Acknowledgement, Implicit confirmation and a Prompt. Like respectivly in the following example:
-
-C: Can I have a beer?
-
-W: Sure, we have a lot of beers. What can I serve?
-
-Find a 
-
-#### 1.2.2. Delay time
+#### Delay time
 To make the response more natural a small delay is desirable. 
 Find a way to implement this with the use of Tasks or Threads.
 
@@ -43,3 +34,12 @@ It can occur that you would like to know more about a certain product.
 Ask the waitress for it. She will google it for you (takes her about 20 seconds) in the meanwhile it is still possible to continue the order.
 
 Good luck!
+
+
+### 2.1 Conversational tips
+
+A typical reply by humans will contain an Acknowledgement, Implicit confirmation and a Prompt. Like respectivly in the following example:
+
+C: Can I have a beer?
+
+W: Sure, we have a lot of beers. What can I serve?
