@@ -111,6 +111,7 @@ namespace RubberDucky.Pages
                 _db.Set<Order>().Add(order);
                 await _db.SaveChangesAsync();
             }
+
         }
 
         // Method called when the user sends a message
@@ -135,25 +136,87 @@ namespace RubberDucky.Pages
             inputMessage.CheckOnNumber(out numberResults);
             inputMessage.CheckConformation(out isConfirming, out confirmingConfidence);
 
-            
+            var processedStaged = false;
+            // If the confidence is high enough it could be that the user is confirming.
+            if (confirmingConfidence > 0.5 && (await GetCurrentOrder()).StagedOrderDetails.Count > 0)
+            {
+                UpdateBasedOnConfirmation(isConfirming, confirmingConfidence);
+                await Acknowledgement(isConfirming, confirmingConfidence);
+                processedStaged = true;
+            }
             // Determine which response to use. If found numbers respond to the numbers.
             if (numberResults.Count > 0)
             {
                 UpdateBasedOnRecievedNumbers(numberResults, inputMessage.Words);
                 await ImplicitConfirmation(numberResults, inputMessage.Words);
             }
-            // If the confidence is high enough it could be that the user is confirming.
-            if (confirmingConfidence > 0.5)
+            // Prompt for something else
+            if ((await GetCurrentOrder()).StagedOrderDetails.Count == 0 && processedStaged)
             {
-                UpdateBasedOnConfirmation(isConfirming, confirmingConfidence);
-                await Acknowledgement(isConfirming, confirmingConfidence);
+                Prompt();
+            } else if(!isConfirming && confirmingConfidence > 0.9 && !processedStaged)
+            {
+                FinalizePrompt();
+            } else if(isConfirming && !processedStaged)
+            {
+                FillPrompt();
             }
 
             // If there are none numbers found and user isn't confirming default resposne.
             if (numberResults.Count == 0 && confirmingConfidence < 0.5)
             {
                 DefaultResponse();
-            }            
+            } 
+        }
+
+        private async void UpdateBasedOnRecievedNumbers(List<ModelResult> numbers, Dictionary<int, string> words)
+        {
+            var order = await GetCurrentOrder();
+            foreach (var number in numbers)
+            {
+                var likelyProducts = _entityRecognizer.GetProducts(words, number);
+
+                if (likelyProducts.Count > 0)
+                {
+                    order.AddStageOrderDetail(GetQuantity(number), likelyProducts.FirstOrDefault());
+                }
+            }
+            await _db.SaveChangesAsync();
+        }
+
+        private int GetQuantity(ModelResult number)
+        {
+            int quantity;
+            int i;
+            int resolution;
+            int.TryParse(number.Text, out i);
+            int.TryParse(number.Resolution.Values.First().ToString(), out resolution);
+            quantity = i;
+            if (i != resolution)
+            {
+                quantity = resolution;
+            }
+            return quantity;
+        }
+
+        private async void UpdateBasedOnConfirmation(bool isConfirming, double confidence)
+        {
+            var order = await GetCurrentOrder();
+            // if is confirming add staged orderdetails to the confirmed orderdetails
+            if (isConfirming)
+            {
+                var amountStaged = order.StagedOrderDetails.Count;
+                for (var i = 0; i < amountStaged; i++)
+                {
+                    order.AddConfirmedOrderDetail(order.StagedOrderDetails.First());
+                }
+            }
+            // if opposing clear all staged order details
+            else if (confidence > 0.9)
+            {
+                order.StagedOrderDetails.Clear();
+            }
+            await _db.SaveChangesAsync();
         }
     }
 }

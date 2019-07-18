@@ -17,60 +17,17 @@ namespace RubberDucky.Pages
 {
     public partial class IndexModel : PageModel
     {
-        private async void UpdateBasedOnRecievedNumbers(List<ModelResult> numbers, Dictionary<int, string> words)
-        {
-            var order = await GetCurrentOrder();
-            foreach (var number in numbers)
-            {
-                var likelyProducts = _entityRecognizer.GetProducts(words, number);
-                
-                if (likelyProducts.Count > 0)
-                {
-                    order.AddStageOrderDetail(GetQuantity(number), likelyProducts.FirstOrDefault());
-                }
-            }
-            await _db.SaveChangesAsync();
-        }
-
-        private int GetQuantity(ModelResult number)
-        {
-            int quantity;
-            int i;
-            int resolution;
-            int.TryParse(number.Text, out i);
-            int.TryParse(number.Resolution.Values.First().ToString(), out resolution);
-            quantity = i;
-            if (i != resolution)
-            {
-                quantity = resolution;
-            }
-            return quantity;
-        }
-
-        private async void UpdateBasedOnConfirmation(bool isConfirming, double confidence)
-        {
-            var order = await GetCurrentOrder();
-            // if is confirming add staged orderdetails to the confirmed orderdetails
-            if (isConfirming)
-            {
-                var amountStaged = order.StagedOrderDetails.Count;
-                for (var i = 0; i < amountStaged; i++)
-                {
-                    order.AddConfirmedOrderDetail(order.StagedOrderDetails.First());
-                }
-            }
-            // if opposing clear all staged order details
-            else if (confidence > 0.9)
-            {
-                order.StagedOrderDetails.Clear();
-            }
-            await _db.SaveChangesAsync();
-        }
-
-        private async void DefaultResponse()
+        private async Task Acknowledgement(bool isConfirming, double confidence)
         {
             var message = new Message();
-            message.UpdateText("Ik kan alleen bestellingen afnemen. Hiervoor heb ik aantallen nodig. Wat wil je?");
+            if (isConfirming)
+            {
+                message.UpdateText("Staat genoteerd.");
+            }
+            else if (confidence > 0.9)
+            {
+                message.UpdateText("Wat moet het zijn?");
+            }
             await StoreRecievedMessage(message);
         }
 
@@ -80,25 +37,25 @@ namespace RubberDucky.Pages
             foreach (var number in numbers)
             {
                 var likelyProduct = _entityRecognizer.GetProducts(words, number).FirstOrDefault();
+                // If the number can't relate to a product from the menu ask to specify
                 if (likelyProduct == null)
                 {
                     message.Text = $"{number.Resolution.Values.First()} van wat?";
                     return;
                 }
-                else
-                {
-                    message.Text = $"{message.Text} {GetQuantity(number)} {likelyProduct.ProductName}";
-                }
 
-
+                message.Text = $"{message.Text} {GetQuantity(number)} {likelyProduct.ProductName}";
+                // If number is last in line round up sentence
                 if (numbers.IndexOf(number) == numbers.Count - 1)
                 {
                     message.Text = $"{message.Text} als ik het goed begrijp?";
                 }
+                // If number is second last in line descriptive addition of the sommation
                 else if (numbers.Count > 1 && numbers.IndexOf(number) == numbers.Count - 2)
                 {
                     message.Text = $"{message.Text} en";
                 }
+                // Else comma seperate the sommation
                 else
                 {
                     message.Text = $"{message.Text}, ";
@@ -108,17 +65,31 @@ namespace RubberDucky.Pages
             
         }
 
-        private async Task Acknowledgement(bool isConfirming, double confidence)
+        private async Task Prompt()
         {
             var message = new Message();
-            if (isConfirming)
-            {
-                message.UpdateText("Komt eraan!");
-            }
-            else if (confidence > 0.9)
-            {
-                message.UpdateText("Wat moet het zijn?");
-            }
+            message.UpdateText("Iets anders?");
+            await StoreRecievedMessage(message);
+        }
+
+        private async Task FillPrompt()
+        {
+            var message = new Message();
+            message.UpdateText("ja?");
+            await StoreRecievedMessage(message);
+        }
+
+        private async Task FinalizePrompt()
+        {
+            var message = new Message();
+            message.UpdateText("Komt eraan!");
+            await StoreRecievedMessage(message);
+        }
+
+        private async void DefaultResponse()
+        {
+            var message = new Message();
+            message.UpdateText("Ik kan alleen bestellingen afnemen. Hiervoor heb ik aantallen nodig. Wat wil je?");
             await StoreRecievedMessage(message);
         }
     }
