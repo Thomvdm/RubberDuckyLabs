@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using RubberDucky.Business;
+using RubberDucky.Business.Interface;
 using RubberDucky.Data;
 
 namespace RubberDucky
@@ -36,7 +38,11 @@ namespace RubberDucky
                 options.MinimumSameSitePolicy = SameSiteMode.None;
             });
             services.AddDbContext<AppDbContext>(options =>
-                              options.UseInMemoryDatabase("messages"));
+                              options.UseInMemoryDatabase("AppDb"));
+
+            services.AddTransient<IMessageResponseBuilder, DefaultMessageResponseBuilder>();
+            services.AddTransient<IMessageProcessor, DefaultMessageProcessor>();
+            services.AddTransient<IEntityRecognizer, EntityRecognizer>();
 
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
         }

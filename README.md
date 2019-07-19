@@ -6,9 +6,11 @@ The aim of this study group is to pass for Microsoft's 70-483 certificate. What 
 
 ## Install
 
-1. Download the zipped project.
-2. Unzip the project.
+1. Fork the project.
+2. Load the project.
 3. Run the RubberDucky!
+
+optional: [Pull Request](https://help.github.com/en/articles/creating-a-pull-request-from-a-fork)
 
 ## Introduction
 

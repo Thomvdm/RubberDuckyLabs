@@ -9,6 +9,7 @@ using RubberDucky.Data;
 using Microsoft.Recognizers.Text;
 using Microsoft.Recognizers.Text.Number;
 using RubberDucky.Business;
+using RubberDucky.Business.Interface;
 using RubberDucky.Model;
 using Microsoft.AspNetCore.Http;
 using System.Text;
@@ -20,12 +21,14 @@ namespace RubberDucky.Pages
     public partial class IndexModel : PageModel
     {
         private readonly AppDbContext _db;
-        private readonly EntityRecognizer _entityRecognizer;
+        private readonly IMessageProcessor _defaultMessageProcessor;
+        private readonly IMessageResponseBuilder _defaultMessageResponseBuilder;
 
-        public IndexModel(AppDbContext db)
+        public IndexModel(AppDbContext db, IMessageProcessor defaultMessageProcessor, IMessageResponseBuilder defaultMessageResponseBuilder)
         {
             _db = db;
-            _entityRecognizer = new EntityRecognizer(db);
+            _defaultMessageProcessor = defaultMessageProcessor;
+            _defaultMessageResponseBuilder = defaultMessageResponseBuilder;
         }
 
         #region Data
@@ -45,12 +48,11 @@ namespace RubberDucky.Pages
 
         public async Task<Order> GetCurrentOrder()
         {
-            return await _db.Set<Order>()
-                    .Include(o => o.ConfirmedOrderDetails)
-                    .ThenInclude(od => od.Product)
-                    .Include(o => o.StagedOrderDetails)
-                    .ThenInclude(od => od.Product)
-                    .FirstOrDefaultAsync(x => x.OrderID.Equals(HttpContext.Session.GetString("OrderId")));
+            if (Order == null)
+            {
+                Order = await _db.GetCurrentOrder(HttpContext.Session.GetString("OrderId"));
+            }
+            return Order;
         }
 
         public async Task<IList<Product>> GetProducts()
@@ -71,27 +73,6 @@ namespace RubberDucky.Pages
             return Messages;
         }
 
-        private async Task StoreSendMessage(Message inputMessage)
-        {
-            inputMessage.UpdateText(inputMessage.Text);
-            inputMessage.Id = Guid.NewGuid().ToString();
-            inputMessage.IsUser = true;
-            inputMessage.Recieved = DateTime.Now;
-            _db.Messages.Add(inputMessage);
-            await _db.SaveChangesAsync();
-        }
-
-        private async Task StoreRecievedMessage(Message message)
-        {
-            if (!string.IsNullOrWhiteSpace(message.Text))
-            {
-                message.Id = Guid.NewGuid().ToString();
-                message.IsUser = false;
-                message.Recieved = DateTime.Now;
-                _db.Messages.Add(message);
-                await _db.SaveChangesAsync();
-            }
-        }
         #endregion
 
         #region Actions
@@ -111,7 +92,6 @@ namespace RubberDucky.Pages
                 _db.Set<Order>().Add(order);
                 await _db.SaveChangesAsync();
             }
-
         }
 
         // Method called when the user sends a message
@@ -121,7 +101,8 @@ namespace RubberDucky.Pages
             {
                 return Page();
             }
-            await StoreSendMessage(Message);
+            _defaultMessageProcessor.SetOrderId(HttpContext?.Session?.GetString("OrderId"));
+            await _defaultMessageResponseBuilder.StoreSendMessage(Message);
             await ProcessMessage(Message);
             return RedirectToPage();
         }
@@ -135,88 +116,38 @@ namespace RubberDucky.Pages
             //To multithreading? Or Task?
             inputMessage.CheckOnNumber(out numberResults);
             inputMessage.CheckConformation(out isConfirming, out confirmingConfidence);
-
+            var orderId = HttpContext.Session.GetString("OrderId");
             var processedStaged = false;
             // If the confidence is high enough it could be that the user is confirming.
             if (confirmingConfidence > 0.5 && (await GetCurrentOrder()).StagedOrderDetails.Count > 0)
             {
-                UpdateBasedOnConfirmation(isConfirming, confirmingConfidence);
-                await Acknowledgement(isConfirming, confirmingConfidence);
+                _defaultMessageProcessor.UpdateBasedOnConfirmation(isConfirming, confirmingConfidence);
+                await _defaultMessageResponseBuilder.Acknowledgement(isConfirming, confirmingConfidence);
                 processedStaged = true;
             }
             // Determine which response to use. If found numbers respond to the numbers.
             if (numberResults.Count > 0)
             {
-                UpdateBasedOnRecievedNumbers(numberResults, inputMessage.Words);
-                await ImplicitConfirmation(numberResults, inputMessage.Words);
+                _defaultMessageProcessor.UpdateBasedOnRecievedNumbers(numberResults, inputMessage.Words);
+                await _defaultMessageResponseBuilder.ImplicitConfirmation(numberResults, inputMessage.Words);
             }
             // Prompt for something else
             if ((await GetCurrentOrder()).StagedOrderDetails.Count == 0 && processedStaged)
             {
-                Prompt();
+                _defaultMessageResponseBuilder.Prompt();
             } else if(!isConfirming && confirmingConfidence > 0.9 && !processedStaged)
             {
-                FinalizePrompt();
+                _defaultMessageResponseBuilder.FinalizePrompt();
             } else if(isConfirming && !processedStaged)
             {
-                FillPrompt();
+                _defaultMessageResponseBuilder.FillPrompt();
             }
 
             // If there are none numbers found and user isn't confirming default resposne.
             if (numberResults.Count == 0 && confirmingConfidence < 0.5)
             {
-                DefaultResponse();
+                _defaultMessageResponseBuilder.DefaultResponse();
             } 
-        }
-
-        private async void UpdateBasedOnRecievedNumbers(List<ModelResult> numbers, Dictionary<int, string> words)
-        {
-            var order = await GetCurrentOrder();
-            foreach (var number in numbers)
-            {
-                var likelyProducts = _entityRecognizer.GetProducts(words, number);
-
-                if (likelyProducts.Count > 0)
-                {
-                    order.AddStageOrderDetail(GetQuantity(number), likelyProducts.FirstOrDefault());
-                }
-            }
-            await _db.SaveChangesAsync();
-        }
-
-        private int GetQuantity(ModelResult number)
-        {
-            int quantity;
-            int i;
-            int resolution;
-            int.TryParse(number.Text, out i);
-            int.TryParse(number.Resolution.Values.First().ToString(), out resolution);
-            quantity = i;
-            if (i != resolution)
-            {
-                quantity = resolution;
-            }
-            return quantity;
-        }
-
-        private async void UpdateBasedOnConfirmation(bool isConfirming, double confidence)
-        {
-            var order = await GetCurrentOrder();
-            // if is confirming add staged orderdetails to the confirmed orderdetails
-            if (isConfirming)
-            {
-                var amountStaged = order.StagedOrderDetails.Count;
-                for (var i = 0; i < amountStaged; i++)
-                {
-                    order.AddConfirmedOrderDetail(order.StagedOrderDetails.First());
-                }
-            }
-            // if opposing clear all staged order details
-            else if (confidence > 0.9)
-            {
-                order.StagedOrderDetails.Clear();
-            }
-            await _db.SaveChangesAsync();
         }
     }
 }

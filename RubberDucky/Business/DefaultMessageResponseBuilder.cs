@@ -1,23 +1,26 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Recognizers.Text;
-using Newtonsoft.Json;
-using RubberDucky.Business;
+﻿using Microsoft.Recognizers.Text;
+using RubberDucky.Business.Interface;
 using RubberDucky.Data;
 using RubberDucky.Extensions;
 using RubberDucky.Model;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
-namespace RubberDucky.Pages
+namespace RubberDucky.Business
 {
-    public partial class IndexModel : PageModel
+    public class DefaultMessageResponseBuilder: IMessageResponseBuilder
     {
-        private async Task Acknowledgement(bool isConfirming, double confidence)
+        private AppDbContext _db;
+        private readonly IEntityRecognizer _entityRecognizer;
+
+        public DefaultMessageResponseBuilder(AppDbContext db, IEntityRecognizer entityRecognizer)
+        {
+            _db = db;
+            _entityRecognizer = entityRecognizer;
+        }
+        public async Task Acknowledgement(bool isConfirming, double confidence)
         {
             var message = new Message();
             if (isConfirming)
@@ -31,7 +34,7 @@ namespace RubberDucky.Pages
             await StoreRecievedMessage(message);
         }
 
-        private async Task ImplicitConfirmation(List<ModelResult> numbers, Dictionary<int, string> words)
+        public async Task ImplicitConfirmation(List<ModelResult> numbers, Dictionary<int, string> words)
         {
             var message = new Message();
             foreach (var number in numbers)
@@ -44,7 +47,7 @@ namespace RubberDucky.Pages
                     return;
                 }
 
-                message.Text = $"{message.Text} {GetQuantity(number)} {likelyProduct.ProductName}";
+                message.Text = $"{message.Text} {number.GetQuantity()} {likelyProduct.ProductName}";
                 // If number is last in line round up sentence
                 if (numbers.IndexOf(number) == numbers.Count - 1)
                 {
@@ -62,35 +65,57 @@ namespace RubberDucky.Pages
                 }
                 await StoreRecievedMessage(message);
             }
-            
+
         }
 
-        private async Task Prompt()
+        public async Task Prompt()
         {
             var message = new Message();
             message.UpdateText("Iets anders?");
             await StoreRecievedMessage(message);
         }
 
-        private async Task FillPrompt()
+        public async Task FillPrompt()
         {
             var message = new Message();
             message.UpdateText("ja?");
             await StoreRecievedMessage(message);
         }
 
-        private async Task FinalizePrompt()
+        public async Task FinalizePrompt()
         {
             var message = new Message();
             message.UpdateText("Komt eraan!");
             await StoreRecievedMessage(message);
         }
 
-        private async void DefaultResponse()
+        public async void DefaultResponse()
         {
             var message = new Message();
             message.UpdateText("Ik kan alleen bestellingen afnemen. Hiervoor heb ik aantallen nodig. Wat wil je?");
             await StoreRecievedMessage(message);
+        }
+
+        public async Task StoreSendMessage(Message inputMessage)
+        {
+            inputMessage.UpdateText(inputMessage.Text);
+            inputMessage.Id = Guid.NewGuid().ToString();
+            inputMessage.IsUser = true;
+            inputMessage.Recieved = DateTime.Now;
+            _db.Messages.Add(inputMessage);
+            await _db.SaveChangesAsync();
+        }
+
+        public async Task StoreRecievedMessage(Message message)
+        {
+            if (!string.IsNullOrWhiteSpace(message.Text))
+            {
+                message.Id = Guid.NewGuid().ToString();
+                message.IsUser = false;
+                message.Recieved = DateTime.Now;
+                _db.Messages.Add(message);
+                await _db.SaveChangesAsync();
+            }
         }
     }
 }

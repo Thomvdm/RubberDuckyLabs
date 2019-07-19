@@ -1,4 +1,6 @@
-﻿using RubberDucky.Model;
+﻿using Microsoft.EntityFrameworkCore;
+using RubberDucky.Data;
+using RubberDucky.Model;
 using System;
 using System.Collections.Generic;
 using System.Linq;

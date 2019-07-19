@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Recognizers.Text;
+using RubberDucky.Business.Interface;
 using RubberDucky.Data;
 using RubberDucky.Model;
 using System;
@@ -9,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace RubberDucky.Business
 {
-    public class EntityRecognizer
+    public class EntityRecognizer: IEntityRecognizer
     {
         private readonly AppDbContext _db;
         public EntityRecognizer(AppDbContext db)
