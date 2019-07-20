@@ -10,12 +10,12 @@ using System.Threading.Tasks;
 
 namespace RubberDucky.Business
 {
-    public class DefaultMessageResponseBuilder: IMessageResponseBuilder
+    public class OrderDialogResponseBuilder: IDialogResponseBuilder
     {
         private AppDbContext _db;
         private readonly IEntityRecognizer _entityRecognizer;
 
-        public DefaultMessageResponseBuilder(AppDbContext db, IEntityRecognizer entityRecognizer)
+        public OrderDialogResponseBuilder(AppDbContext db, IEntityRecognizer entityRecognizer)
         {
             _db = db;
             _entityRecognizer = entityRecognizer;

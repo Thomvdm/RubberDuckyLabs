@@ -40,8 +40,8 @@ namespace RubberDucky
             services.AddDbContext<AppDbContext>(options =>
                               options.UseInMemoryDatabase("AppDb"));
 
-            services.AddTransient<IMessageResponseBuilder, DefaultMessageResponseBuilder>();
-            services.AddTransient<IMessageProcessor, DefaultMessageProcessor>();
+            services.AddTransient<IDialogResponseBuilder, OrderDialogResponseBuilder>();
+            services.AddTransient<IDialog, OrderDialog>();
             services.AddTransient<IEntityRecognizer, EntityRecognizer>();
 
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_1);

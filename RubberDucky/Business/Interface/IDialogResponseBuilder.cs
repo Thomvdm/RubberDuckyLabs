@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace RubberDucky.Business.Interface
 {
-    public interface IMessageResponseBuilder
+    public interface IDialogResponseBuilder
     {
         Task Acknowledgement(bool isConfirming, double confidence);
         Task ImplicitConfirmation(List<ModelResult> numbers, Dictionary<int, string> words);

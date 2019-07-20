@@ -21,14 +21,14 @@ namespace RubberDucky.Pages
     public partial class IndexModel : PageModel
     {
         private readonly AppDbContext _db;
-        private readonly IMessageProcessor _defaultMessageProcessor;
-        private readonly IMessageResponseBuilder _defaultMessageResponseBuilder;
+        private readonly IDialog _orderDialog;
+        private readonly IDialogResponseBuilder _orderDialogResponseBuilder;
 
-        public IndexModel(AppDbContext db, IMessageProcessor defaultMessageProcessor, IMessageResponseBuilder defaultMessageResponseBuilder)
+        public IndexModel(AppDbContext db, IDialog orderDialog, IDialogResponseBuilder orderDialogResponseBuilder)
         {
             _db = db;
-            _defaultMessageProcessor = defaultMessageProcessor;
-            _defaultMessageResponseBuilder = defaultMessageResponseBuilder;
+            _orderDialog = orderDialog;
+            _orderDialogResponseBuilder = orderDialogResponseBuilder;
         }
 
         #region Data
@@ -101,53 +101,10 @@ namespace RubberDucky.Pages
             {
                 return Page();
             }
-            _defaultMessageProcessor.SetOrderId(HttpContext?.Session?.GetString("OrderId"));
-            await _defaultMessageResponseBuilder.StoreSendMessage(Message);
-            await ProcessMessage(Message);
+            await _orderDialogResponseBuilder.StoreSendMessage(Message);
+            await _orderDialog.ProcessMessage(Message, HttpContext?.Session?.GetString("OrderId"));
             return RedirectToPage();
         }
         #endregion
-
-        private async Task ProcessMessage(Message inputMessage)
-        {
-            List<ModelResult> numberResults;
-            bool isConfirming;
-            double confirmingConfidence;
-            //To multithreading? Or Task?
-            inputMessage.CheckOnNumber(out numberResults);
-            inputMessage.CheckConformation(out isConfirming, out confirmingConfidence);
-            var orderId = HttpContext.Session.GetString("OrderId");
-            var processedStaged = false;
-            // If the confidence is high enough it could be that the user is confirming.
-            if (confirmingConfidence > 0.5 && (await GetCurrentOrder()).StagedOrderDetails.Count > 0)
-            {
-                _defaultMessageProcessor.UpdateBasedOnConfirmation(isConfirming, confirmingConfidence);
-                await _defaultMessageResponseBuilder.Acknowledgement(isConfirming, confirmingConfidence);
-                processedStaged = true;
-            }
-            // Determine which response to use. If found numbers respond to the numbers.
-            if (numberResults.Count > 0)
-            {
-                _defaultMessageProcessor.UpdateBasedOnRecievedNumbers(numberResults, inputMessage.Words);
-                await _defaultMessageResponseBuilder.ImplicitConfirmation(numberResults, inputMessage.Words);
-            }
-            // Prompt for something else
-            if ((await GetCurrentOrder()).StagedOrderDetails.Count == 0 && processedStaged)
-            {
-                _defaultMessageResponseBuilder.Prompt();
-            } else if(!isConfirming && confirmingConfidence > 0.9 && !processedStaged)
-            {
-                _defaultMessageResponseBuilder.FinalizePrompt();
-            } else if(isConfirming && !processedStaged)
-            {
-                _defaultMessageResponseBuilder.FillPrompt();
-            }
-
-            // If there are none numbers found and user isn't confirming default resposne.
-            if (numberResults.Count == 0 && confirmingConfidence < 0.5)
-            {
-                _defaultMessageResponseBuilder.DefaultResponse();
-            } 
-        }
     }
 }
