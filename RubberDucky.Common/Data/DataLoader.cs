@@ -58,7 +58,7 @@ namespace RubberDucky.Common.Data
                 result = GetProducts().Cast<T>().ToList();
             }
             stopwatch.Stop();
-            Debug.WriteLine($"{typeof(T).Name}s added to context in {stopwatch.ElapsedMilliseconds}ms");
+            Debug.WriteLine($"{typeof(T).Name}s loaded in {stopwatch.ElapsedMilliseconds}ms");
             return result;
         }
 
