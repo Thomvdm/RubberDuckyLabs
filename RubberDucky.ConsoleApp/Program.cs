@@ -95,7 +95,7 @@ namespace RubberDucky.ConsoleApp
             Console.WriteLine("Start loading data...");
             var start = DateTime.Now;
             DbInitializer.Initialize(_serviceProvider);
-            Console.WriteLine($"Data loaded in {(DateTime.Now.Subtract(start)).TotalMilliseconds}ms");
+            Console.WriteLine($"Finished loading and storing in memory in {(DateTime.Now.Subtract(start)).TotalMilliseconds}ms");
 
             _controller = new Controller(_serviceProvider.GetService<AppDbContext>(), _serviceProvider.GetService<IDialog>(), _serviceProvider.GetService<IDialogResponseBuilder>());
 

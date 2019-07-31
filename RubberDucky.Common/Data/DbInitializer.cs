@@ -70,7 +70,7 @@ namespace RubberDucky.Common.Data
                     }
                 }
                 stopwatch.Stop();
-                Debug.WriteLine($"All Data loaded in {stopwatch.ElapsedMilliseconds}ms");
+                Console.WriteLine($"All Data loaded in {stopwatch.ElapsedMilliseconds}ms");
                 context.SaveChanges();
             }
         }
