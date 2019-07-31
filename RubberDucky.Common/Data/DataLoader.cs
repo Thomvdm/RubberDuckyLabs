@@ -1,6 +1,7 @@
 ﻿using RubberDucky.Common.Model;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -33,6 +34,32 @@ namespace RubberDucky.Common.Data
                 }
                 return _fileLocation;
             }
+        }
+
+        public static List<T> Get<T>() where T : class
+        {
+            var stopwatch = new Stopwatch();
+            stopwatch.Start();
+            var result = new List<T>();
+            if(typeof(T) == typeof(Customer))
+            {
+                result = GetCustomers().Cast<T>().ToList();
+            }
+            else if (typeof(T) == typeof(OrderDetail))
+            {
+                result = GetOrderDetails().Cast<T>().ToList();
+            }
+            else if (typeof(T) == typeof(Order))
+            {
+                result = GetOrders().Cast<T>().ToList();
+            }
+            else if (typeof(T) == typeof(Product))
+            {
+                result = GetProducts().Cast<T>().ToList();
+            }
+            stopwatch.Stop();
+            Debug.WriteLine($"{typeof(T).Name}s added to context in {stopwatch.ElapsedMilliseconds}ms");
+            return result;
         }
 
         public static IEnumerable<Customer> GetCustomers()
@@ -96,8 +123,6 @@ namespace RubberDucky.Common.Data
                     });
                 }
             }
-
-
             return oders;
         }
 
