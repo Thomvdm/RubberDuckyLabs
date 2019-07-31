@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using RubberDucky.Common.Model;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -19,6 +20,8 @@ namespace RubberDucky.Common.Data
             using (var context = new AppDbContext(
             serviceProvider.GetRequiredService<DbContextOptions<AppDbContext>>()))
             {
+                var stopwatch = new Stopwatch();
+                stopwatch.Start();
                 //Messages
                 if (!context.Set<Message>().Any())
                 {
@@ -66,10 +69,10 @@ namespace RubberDucky.Common.Data
                         context.Set<Customer>().Add(customer);
                     }
                 }
-
+                stopwatch.Stop();
+                Debug.WriteLine($"All Data loaded in {stopwatch.ElapsedMilliseconds}ms");
                 context.SaveChanges();
             }
-
         }
     }
 }
