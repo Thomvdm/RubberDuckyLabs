@@ -22,6 +22,8 @@ namespace RubberDucky.Common.Data
             {
                 var stopwatch = new Stopwatch();
                 stopwatch.Start();
+                var roundSW = new Stopwatch();
+                roundSW.Start();
                 //Messages
                 if (!context.Set<Message>().Any())
                 {
@@ -34,6 +36,9 @@ namespace RubberDucky.Common.Data
                     });
 
                 }
+                roundSW.Stop();
+                Console.WriteLine($"Messages loaded in {roundSW.ElapsedMilliseconds}ms");
+                roundSW.Restart();
                 if (!context.Set<Product>().Any())
                 {
                     var products = DataLoader.GetProducts();
@@ -42,7 +47,9 @@ namespace RubberDucky.Common.Data
                         context.Set<Product>().Add(product);
                     }
                 }
-
+                roundSW.Stop();
+                Console.WriteLine($"Products loaded in {roundSW.ElapsedMilliseconds}ms");
+                roundSW.Restart();
                 if (!context.Set<OrderDetail>().Any())
                 {
                     var orderDetails = DataLoader.GetOrderDetails();
@@ -51,7 +58,9 @@ namespace RubberDucky.Common.Data
                         context.Set<OrderDetail>().Add(detail);
                     }
                 }
-
+                roundSW.Stop();
+                Console.WriteLine($"OrderDetails loaded in {roundSW.ElapsedMilliseconds}ms");
+                roundSW.Restart();
                 if (!context.Set<Order>().Any())
                 {
                     var orders = DataLoader.GetOrders();
@@ -60,7 +69,9 @@ namespace RubberDucky.Common.Data
                         context.Set<Order>().Add(order);
                     }
                 }
-
+                roundSW.Stop();
+                Console.WriteLine($"Orders loaded in {roundSW.ElapsedMilliseconds}ms");
+                roundSW.Restart();
                 if (!context.Set<Customer>().Any())
                 {
                     var customers = DataLoader.GetCustomers();
@@ -69,6 +80,9 @@ namespace RubberDucky.Common.Data
                         context.Set<Customer>().Add(customer);
                     }
                 }
+                roundSW.Stop();
+                Console.WriteLine($"Customers loaded in {roundSW.ElapsedMilliseconds}ms");
+
                 stopwatch.Stop();
                 Console.WriteLine($"All Data loaded in {stopwatch.ElapsedMilliseconds}ms");
                 context.SaveChanges();
